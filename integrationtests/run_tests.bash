@@ -6,7 +6,7 @@
 set -e
 
 # TODO move to docker image
-pip install px4tools pymavlink -q
+pip install px4tools pymavlink toml numpy -q
 
 # A POSIX variable
 OPTIND=1         # Reset in case getopts has been used previously in the shell.
