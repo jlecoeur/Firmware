@@ -336,9 +336,10 @@ extern "C" {
 
 				// Execute a blocking wait for that time in the future
 				errno = 0;
-				ret = px4_sem_timedwait(&sem, &ts);
 #ifndef __PX4_DARWIN
 				ret = errno;
+#else
+				ret = px4_sem_timedwait(&sem, &ts);
 #endif
 
 				// Ensure ret is negative on failure
