@@ -16,7 +16,7 @@ if [ -z ${PX4_DOCKER_REPO+x} ]; then
 		PX4_DOCKER_REPO="px4io/px4-dev-armhf:2017-09-26"
 	elif [[ $@ =~ .*clang.* ]] || [[ $@ =~ .*scan-build.* ]]; then
 		# clang tools
-		PX4_DOCKER_REPO="px4io/px4-dev-clang:2017-09-26"
+		PX4_DOCKER_REPO="px4io/px4-dev-clang"
 	elif [[ $@ =~ .*cppcheck.* ]]; then
 		# need Ubuntu 17.04 for cppcheck cmake support
 		# TODO: remove this once px4io/px4-dev-base updates
