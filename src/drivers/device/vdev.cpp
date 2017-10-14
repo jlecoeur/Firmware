@@ -519,7 +519,6 @@ CDev *CDev::getDev(const char *path)
 
 void CDev::showDevices()
 {
-	int i = 0;
 	PX4_INFO("PX4 Devices:");
 
 	pthread_mutex_lock(&devmutex);
@@ -535,7 +534,7 @@ void CDev::showDevices()
 	PX4_INFO("DF Devices:");
 	const char *dev_path;
 	unsigned int index = 0;
-	i = 0;
+	int i = 0;
 
 	do {
 		// Each look increments index and returns -1 if end reached
