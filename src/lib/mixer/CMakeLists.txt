@@ -51,6 +51,7 @@ set(geometry_files
 	octa_plus.toml
 	octa_cox.toml
 	octa_cox_wide.toml
+	octa_cox_omni.toml
 	twin_engine.toml
 	tri_y.toml
 	dodeca_top_cox.toml
