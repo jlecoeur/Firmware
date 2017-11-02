@@ -87,6 +87,14 @@ add_custom_target(mixer_gen_6dof
 	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_6dof.generated.h
 	DEPENDS ${geometries_list})
 
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_6dof_normalized.generated.h
+	COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/geometries/tools/px_generate_mixers.py --normalize --sixdof -f ${geometries_list} -o ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_6dof_normalized.generated.h
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/geometries/tools/px_generate_mixers.py ${geometries_list}
+	)
+add_custom_target(mixer_gen_6dof_norm
+	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_6dof_normalized.generated.h
+	DEPENDS ${geometries_list})
+
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_legacy.generated.h
 	COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/multi_tables.py > ${CMAKE_CURRENT_BINARY_DIR}/mixer_multirotor_legacy.generated.h
 	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/multi_tables.py
@@ -108,6 +116,7 @@ px4_add_module(
 		mixer_gen
 		mixer_gen_norm
 		mixer_gen_6dof
+		mixer_gen_6dof_norm
 		mixer_gen_legacy
 	)
 # vim: set noet ft=cmake fenc=utf-8 ff=unix :
