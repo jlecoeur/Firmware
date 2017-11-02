@@ -110,6 +110,7 @@ px4_add_module(
 		mixer_helicopter.cpp
 		mixer_load.c
 		mixer_multirotor.cpp
+		mixer_multirotor_6dof.cpp
 		mixer_simple.cpp
 	DEPENDS
 		platforms__common

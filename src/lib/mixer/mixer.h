@@ -662,6 +662,8 @@ private:
 	MultirotorMixer operator=(const MultirotorMixer &);
 };
 
+#include "mixer_multirotor_6dof.hpp"
+
 /** helicopter swash servo mixer */
 struct mixer_heli_servo_s {
 	float angle;
