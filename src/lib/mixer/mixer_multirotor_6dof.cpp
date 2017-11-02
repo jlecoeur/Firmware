@@ -189,7 +189,8 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 	// TODO: swap control order (r p y x y z) instead of (r p y z x y)
 	float		x_thrust  = math::constrain(get_control(0, 4), 0.0f, 1.0f);
 	float		y_thrust  = math::constrain(get_control(0, 5), 0.0f, 1.0f);
-	float		z_thrust  = math::constrain(get_control(0, 3), 0.0f, 1.0f);
+	// TODO remove the - sign
+	float		z_thrust  = - math::constrain(get_control(0, 3), 0.0f, 1.0f);
 	
 	float		min_out = 1.0f;
 	float		max_out = 0.0f;
@@ -207,8 +208,7 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 					yaw * _rotors[i].yaw_scale +
 					x_thrust * _rotors[i].x_scale +
 					y_thrust * _rotors[i].y_scale +
-		// TODO remove the - sign
-			    	- z_thrust * _rotors[i].z_scale;
+			    	z_thrust * _rotors[i].z_scale;
 
 		/* calculate min and max output values */
 		if (out < min_out) {
@@ -390,8 +390,6 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 void
 MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high, bool clipping_low)
 {
-	// TODO: handle saturation for 6dof
-
 	// The motor is saturated at the upper limit
 	// check which control axes and which directions are contributing
 	if (clipping_high) {
@@ -424,11 +422,35 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 			_saturation_status.flags.yaw_neg = true;
 		}
 
-		// A positive change in thrust will increase saturation
-		_saturation_status.flags.x_thrust_pos = true;
-		_saturation_status.flags.y_thrust_pos = true;
-		_saturation_status.flags.z_thrust_pos = true;
+		// check if the x input is saturating
+		if (_rotors[index].x_scale > 0.0f) {
+			// A positive change in x will increase saturation
+			_saturation_status.flags.x_pos = true;
 
+		} else if (_rotors[index].x_scale < 0.0f) {
+			// A negative change in x will increase saturation
+			_saturation_status.flags.x_neg = true;
+		}
+
+		// check if the y input is saturating
+		if (_rotors[index].y_scale > 0.0f) {
+			// A positive change in y will increase saturation
+			_saturation_status.flags.y_pos = true;
+
+		} else if (_rotors[index].y_scale < 0.0f) {
+			// A negative change in y will increase saturation
+			_saturation_status.flags.y_neg = true;
+		}
+
+		// check if the z input is saturating
+		if (_rotors[index].z_scale > 0.0f) {
+			// A positive change in z will increase saturation
+			_saturation_status.flags.z_pos = true;
+			
+		} else if (_rotors[index].z_scale < 0.0f) {
+			// A negative change in z will increase saturation
+			_saturation_status.flags.z_neg = true;
+		}
 	}
 
 	// The motor is saturated at the lower limit
@@ -464,10 +486,36 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 			_saturation_status.flags.yaw_pos = true;
 		}
 
-		// A negative change in thrust will increase saturation
-		_saturation_status.flags.x_thrust_neg = true;
-		_saturation_status.flags.y_thrust_neg = true;
-		_saturation_status.flags.z_thrust_neg = true;
+		// check if the x input is saturating
+		if (_rotors[index].x_scale > 0.0f) {
+			// A negative change in x will increase saturation
+			_saturation_status.flags.x_neg = true;
+
+		} else if (_rotors[index].x_scale < 0.0f) {
+			// A positive change in x will increase saturation
+			_saturation_status.flags.x_pos = true;
+		}
+
+		// check if the y input is saturating
+		if (_rotors[index].y_scale > 0.0f) {
+			// A negative change in y will increase saturation
+			_saturation_status.flags.y_neg = true;
+
+		} else if (_rotors[index].y_scale < 0.0f) {
+			// A positive change in y will increase saturation
+			_saturation_status.flags.y_pos = true;
+		}
+						
+		// check if the z input is saturating
+		if (_rotors[index].z_scale > 0.0f) {
+			// A negative change in z will increase saturation
+			_saturation_status.flags.z_neg = true;
+
+		} else if (_rotors[index].z_scale < 0.0f) {
+			// A positive change in z will increase saturation
+			_saturation_status.flags.z_pos = true;
+		}
+
 	}
 
 	_saturation_status.flags.valid = true;
