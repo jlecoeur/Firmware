@@ -17,17 +17,26 @@
 class __EXPORT MultirotorMixer6dof : public Mixer
 {
 public:
-	/**
 
+	/**
+	 * Convention for command order
+	 */
+	enum Command {
+		ROLL_COMMAND 	= 0,
+		PITCH_COMMAND	= 1,
+		YAW_COMMAND		= 2,
+		X_COMMAND		= 3,
+		Y_COMMAND		= 4,
+		Z_COMMAND		= 5,
+
+		COMMAND_MAX		= 6,
+	};
+
+	/**
 	 * Precalculated rotor mix.
 	 */
 	struct Rotor {
-		float	roll_scale;	 /**< scales roll for this rotor */
-		float	pitch_scale; /**< scales pitch for this rotor */
-		float	yaw_scale;	 /**< scales yaw for this rotor */
-		float	x_scale;	 /**< scales x thrust for this rotor */
-		float	y_scale;	 /**< scales x thrust for this rotor */
-		float	z_scale;	 /**< scales x thrust for this rotor */
+		float scale[COMMAND_MAX];	 /**< scales on roll, pitch, yaw, x thrust, y thrust, z thrust for this rotor */
 	};
 
 	/**
@@ -38,13 +47,13 @@ public:
 	 * @param geometry		The selected geometry.
 	 * @param roll_scale	Scaling factor applied to roll
 	 * @param pitch_scale	Scaling factor applied to pitch
-	 * @param yaw_wcale		Scaling factor applied to yaw inputs
-	 * @param x_wcale		Scaling factor applied to x thrust inputs
-	 * @param y_wcale		Scaling factor applied to y thrust inputs
-	 * @param z_wcale		Scaling factor applied to z thrust inputs
+	 * @param yaw_scale		Scaling factor applied to yaw inputs
+	 * @param x_scale		Scaling factor applied to x thrust inputs
+	 * @param y_scale		Scaling factor applied to y thrust inputs
+	 * @param z_scale		Scaling factor applied to z thrust inputs
 	 * @param idle_speed	Minimum rotor control output value; usually
-	 *				tuned to ensure that rotors never stall at the
-	 * 				low end of their control range.
+	 *						tuned to ensure that rotors never stall at the
+	 * 						low end of their control range.
 	 */
 	MultirotorMixer6dof(ControlCallback control_cb,
 			uintptr_t cb_handle,
