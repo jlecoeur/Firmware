@@ -172,17 +172,15 @@ matrix::Vector<float, 6>
 MultirotorMixer6dof::get_command(void) const
 {
 	const float command_[6] = {
-		math::constrain(get_control(0, 0) * _roll_scale,  -1.0f, 1.0f), 
-		math::constrain(get_control(0, 1) * _pitch_scale, -1.0f, 1.0f),
-		math::constrain(get_control(0, 2) * _yaw_scale,   -1.0f, 1.0f),
-		math::constrain(get_control(0, 4) * _x_scale, 	  -1.0f, 1.0f), 			// TODO: this should be index 3		
-		math::constrain(get_control(0, 5) * _y_scale, 	  -1.0f, 1.0f), 			// TODO: this should be index 4		
-		math::constrain(get_control(0, 3) * _z_scale, 	  -1.0f, 1.0f), 			// TODO: this should be index 5		
+		math::constrain(get_control(0, actuator_controls_s::INDEX_ROLL) 	* _roll_scale,  -1.0f, 1.0f), 
+		math::constrain(get_control(0, actuator_controls_s::INDEX_PITCH) 	* _pitch_scale, -1.0f, 1.0f),
+		math::constrain(get_control(0, actuator_controls_s::INDEX_YAW)	 	* _yaw_scale,   -1.0f, 1.0f),
+		math::constrain(get_control(0, actuator_controls_s::INDEX_Z_THRUST) * _x_scale, 	-1.0f, 1.0f),	
+		math::constrain(get_control(0, actuator_controls_s::INDEX_Y_THRUST) * _y_scale, 	-1.0f, 1.0f),		
+		math::constrain(get_control(0, actuator_controls_s::INDEX_Z_THRUST) * _z_scale, 	-1.0f, 1.0f),		
 	};
 
 	matrix::Vector<float, 6> command(command_);
-	// TODO remove the - sign on z thrust
-	command(Z_COMMAND) *= -1.0f;
 
 	return command;
 }

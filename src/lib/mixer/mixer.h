@@ -132,6 +132,7 @@
 #include "drivers/drv_mixer.h"
 
 #include "mixer_load.h"
+#include <uORB/topics/actuator_controls.h>
 
 /**
  * Abstract class defining a mixer mixing zero or more inputs to
