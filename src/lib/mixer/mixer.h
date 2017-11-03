@@ -223,7 +223,7 @@ protected:
 	 * @param index			Control index to fetch.
 	 * @return			The control value.
 	 */
-	float				get_control(uint8_t group, uint8_t index);
+	float				get_control(uint8_t group, uint8_t index) const;
 
 	/**
 	 * Perform simpler linear scaling.

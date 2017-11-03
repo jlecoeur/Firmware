@@ -1,4 +1,6 @@
 #include "mixer.h"
+#include <matrix/math.hpp>
+
 
 /**
  * Supported multirotor geometries.
@@ -151,6 +153,9 @@ private:
 
 	unsigned			_rotor_count;
 	const Rotor			*_rotors;
+
+	matrix::Vector<float, 6> get_command(void) const;
+	matrix::Vector<float, 6> desaturate_command(const matrix::Vector<float, 6>& command) const;
 
 	float 				*_outputs_prev = nullptr;
 

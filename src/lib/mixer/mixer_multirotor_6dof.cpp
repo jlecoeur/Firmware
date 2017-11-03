@@ -55,7 +55,6 @@
 #include <math.h>
 
 #include <mathlib/math/Limits.hpp>
-#include <matrix/math.hpp>
 #include <drivers/drv_pwm_output.h>
 
 #include "mixer.h"
@@ -169,23 +168,9 @@ MultirotorMixer6dof::from_text(Mixer::ControlCallback control_cb, uintptr_t cb_h
 		       s[6] / 10000.0f);
 }
 
-unsigned
-MultirotorMixer6dof::mix(float *outputs, unsigned space)
+matrix::Vector<float, 6> 
+MultirotorMixer6dof::get_command(void) const
 {
-	/* Summary of mixing strategy:
-	The command is represented as a vector y of dimension 6 (roll pitch yaw x y z).
-	Scale factors for rotor i are represented as a vector b_i of dimension 6.
-	Each rotor vector is normal to 2 planes defined as (y . b_i) = 1 (high motor saturation) and (y . b_i) = 0 (low motor saturation), 
-	The command vector y should be between these two planes so that motor i is not saturated.
-	Baseline command y_s is a command that does not saturate any motor.
-	1) for each rotor:
-	   a) mix roll, pitch yaw and thrust (out_i = y . b_i)
-	   b) if the output violate range [0,1] then shift the command towards the baseline command 
-	      so that the new command is on one of the two saturation planes for this motor.
-	3) recompute all outputs with new command
-	4) scale all outputs to range [idle_speed,1]
-	*/
-
 	const float command_[6] = {
 		math::constrain(get_control(0, 0) * _roll_scale,  -1.0f, 1.0f), 
 		math::constrain(get_control(0, 1) * _pitch_scale, -1.0f, 1.0f),
@@ -194,11 +179,21 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 		math::constrain(get_control(0, 5) * _y_scale, 	  -1.0f, 1.0f), 			// TODO: this should be index 4		
 		math::constrain(get_control(0, 3) * _z_scale, 	  -1.0f, 1.0f), 			// TODO: this should be index 5		
 	};
+
 	matrix::Vector<float, 6> command(command_);
-	
 	// TODO remove the - sign on z thrust
 	command(Z_COMMAND) *= -1.0f;
-	
+
+	return command;
+}
+
+
+matrix::Vector<float, 6> 
+MultirotorMixer6dof::desaturate_command(const matrix::Vector<float, 6>& desired_command) const
+{
+	// Copy desired command (potentially saturates motors)
+	matrix::Vector<float, 6> command = desired_command;
+
 	// This command should not saturate any motor [0 0 0 0 0 -0.5] should be fine in most cases
 	matrix::Vector<float, 6> baseline_command;
 	baseline_command(Z_COMMAND) = -0.5f;
@@ -216,9 +211,6 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 	matrix::Vector<float, 6> u = command - baseline_command;
 	u.unit();
 	
-	// clean out class variable used to capture saturation
-	_saturation_status.value = 0;
-
 	// apply first mix to capture saturation	
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		// rotor scale, b is the vector normal to the saturation planes
@@ -230,14 +222,12 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 		// if motor is saturated			
 		// bring command closer to baseline_command in order to un-saturate this motor
 		if (out > 1.0f) {
-			_saturation_status.flags.motor_pos = true;
 			float ub = u * b;
 			if (fabsf(ub) > 1e-6f) {
 				float k = (1.0f - baseline_command * b) / ub;
 				command = baseline_command + k * u;
 			}
 		} else if (out < 0.0f) {
-			_saturation_status.flags.motor_neg = true;
 			float ub = u * b;
 			if (fabsf(ub) > 1e-6f) {
 				float k = (0.0f - baseline_command * b) / ub;
@@ -246,7 +236,34 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 		}
 	}
 
-	// recompute mixing
+	return command;
+}
+
+
+unsigned
+MultirotorMixer6dof::mix(float *outputs, unsigned space)
+{
+	/* Summary of mixing strategy:
+	The command is represented as a vector y of dimension 6 (roll pitch yaw x y z).
+	Scale factors for rotor i are represented as a vector b_i of dimension 6.
+	Each rotor vector is normal to 2 planes defined as (y . b_i) = 1 (high motor saturation) and (y . b_i) = 0 (low motor saturation), 
+	The command vector y should be between these two planes so that motor i is not saturated.
+	Baseline command y_s is a command that does not saturate any motor.
+	1) for each rotor:
+	   a) mix roll, pitch yaw and thrust (out_i = y . b_i)
+	   b) if the output violate range [0,1] then shift the command towards the baseline command 
+	      so that the new command is on one of the two saturation planes for this motor.
+	3) recompute all outputs with new command
+	4) scale all outputs to range [idle_speed,1]
+	*/
+	
+	// Get raw command
+	matrix::Vector<float, 6> command = get_command();
+
+	// Make sure the command is in the feaseable actuation space
+	command = desaturate_command(command);
+
+	// Compute mixing
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		// rotor scale, b is the vector normal to the saturation planes	
 		const matrix::Vector<float, 6> b(_rotors[i].scale);		
@@ -270,7 +287,10 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 		outputs[i] = math::constrain(_idle_speed + (outputs[i] * (1.0f - _idle_speed)), _idle_speed, 1.0f);
 	}
 
-	/* slew rate limiting and saturation checking */
+	// clean out class variable used to capture saturation
+	_saturation_status.value = 0;
+		
+	// slew rate limiting and saturation checking
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		bool clipping_high = false;
 		bool clipping_low = false;
@@ -324,6 +344,9 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 	// The motor is saturated at the upper limit
 	// check which control axes and which directions are contributing
 	if (clipping_high) {
+		// At least one motor is saturated at the upper limit
+		_saturation_status.flags.motor_pos = true;
+		
 		if (_rotors[index].scale[ROLL_COMMAND] > 0.0f) {
 			// A positive change in roll will increase saturation
 			_saturation_status.flags.roll_pos = true;
@@ -387,6 +410,9 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 	// The motor is saturated at the lower limit
 	// check which control axes and which directions are contributing
 	if (clipping_low) {
+		// At least one motor is saturated at the lower limit
+		_saturation_status.flags.motor_neg = true;
+		
 		// check if the roll input is saturating
 		if (_rotors[index].scale[ROLL_COMMAND] > 0.0f) {
 			// A negative change in roll will increase saturation
