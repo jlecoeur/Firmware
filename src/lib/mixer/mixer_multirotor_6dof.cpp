@@ -175,14 +175,13 @@ MultirotorMixer6dof::get_command(void) const
 		math::constrain(get_control(0, actuator_controls_s::INDEX_ROLL) 	* _roll_scale,  -1.0f, 1.0f), 
 		math::constrain(get_control(0, actuator_controls_s::INDEX_PITCH) 	* _pitch_scale, -1.0f, 1.0f),
 		math::constrain(get_control(0, actuator_controls_s::INDEX_YAW)	 	* _yaw_scale,   -1.0f, 1.0f),
-		math::constrain(get_control(0, actuator_controls_s::INDEX_Z_THRUST) * _x_scale, 	-1.0f, 1.0f),	
+		math::constrain(get_control(0, actuator_controls_s::INDEX_X_THRUST) * _x_scale, 	-1.0f, 1.0f),
 		math::constrain(get_control(0, actuator_controls_s::INDEX_Y_THRUST) * _y_scale, 	-1.0f, 1.0f),		
-		math::constrain(get_control(0, actuator_controls_s::INDEX_Z_THRUST) * _z_scale, 	-1.0f, 1.0f),		
+		math::constrain(get_control(0, actuator_controls_s::INDEX_Z_THRUST) * _z_scale, 	-1.0f, 1.0f),
 	};
 
-	matrix::Vector<float, 6> command(command_);
-
-	return command;
+	// return command;
+	return matrix::Vector<float, 6>(command_);
 }
 
 
@@ -223,13 +222,17 @@ MultirotorMixer6dof::desaturate_command(const matrix::Vector<float, 6>& desired_
 			float ub = u * b;
 			if (fabsf(ub) > 1e-6f) {
 				float k = (1.0f - baseline_command * b) / ub;
-				command = baseline_command + k * u;
+				if (k > 0.0f) {
+					command = baseline_command + k * u;
+				}
 			}
 		} else if (out < 0.0f) {
 			float ub = u * b;
 			if (fabsf(ub) > 1e-6f) {
 				float k = (0.0f - baseline_command * b) / ub;
-				command = baseline_command + k * u;
+				if (k > 0.0f) {
+					command = baseline_command + k * u;
+				}
 			}
 		}
 	}
