@@ -1530,6 +1530,10 @@ MulticopterPositionControl::control_non_manual(float dt)
 		_att_sp.pitch_body = 0.0f;
 		_att_sp.yaw_body = _yaw;
 		_att_sp.thrust = 0.0f;
+		_att_sp.thrust_3d_valid = false;
+		_att_sp.thrust_3d[0] = 0.0f;
+		_att_sp.thrust_3d[1] = 0.0f;
+		_att_sp.thrust_3d[2] = 0.0f;
 
 		_att_sp.timestamp = hrt_absolute_time();
 
@@ -2563,7 +2567,8 @@ MulticopterPositionControl::calculate_thrust_setpoint(float dt)
 	}
 
 	/* limit thrust vector and check for saturation */
-	bool saturation_xy = false;
+	bool saturation_x = false;
+	bool saturation_y = false;
 	bool saturation_z = false;
 
 	/* limit min lift */
@@ -2615,7 +2620,8 @@ MulticopterPositionControl::calculate_thrust_setpoint(float dt)
 					thrust_sp(0) *= k;
 					thrust_sp(1) *= k;
 					/* Don't freeze x,y integrals if they both want to throttle down */
-					saturation_xy = ((vel_err(0) * _vel_sp(0) < 0.0f) && (vel_err(1) * _vel_sp(1) < 0.0f)) ? saturation_xy : true;
+					saturation_x = (vel_err(0) * _vel_sp(0) < 0.0f) ? saturation_x : true;
+					saturation_y = (vel_err(1) * _vel_sp(1) < 0.0f) ? saturation_y : true;
 				}
 			}
 		}
@@ -2644,63 +2650,133 @@ MulticopterPositionControl::calculate_thrust_setpoint(float dt)
 
 	/* Calculate desired total thrust amount in body z direction. */
 	/* To compensate for excess thrust during attitude tracking errors we
-	 * project the desired thrust force vector F onto the real vehicle's thrust axis in NED:
-	 * body thrust axis [0,0,-1]' rotated by R is: R*[0,0,-1]' = -R_z */
-	matrix::Vector3f R_z(_R(0, 2), _R(1, 2), _R(2, 2));
-	matrix::Vector3f F(thrust_sp.data);
-	float thrust_body_z = F.dot(-R_z); /* recalculate because it might have changed */
+	 * project the desired thrust force vector F onto the real vehicle's thrust axis in NED */
+	math::Vector<3> thrust_sp_body = _R.transposed() * thrust_sp;
 
-	/* limit max thrust */
-	if (fabsf(thrust_body_z) > thr_max) {
-		if (thrust_sp(2) < 0.0f) {
-			if (-thrust_sp(2) > thr_max) {
-				/* thrust Z component is too large, limit it */
-				thrust_sp(0) = 0.0f;
-				thrust_sp(1) = 0.0f;
-				thrust_sp(2) = -thr_max;
-				saturation_xy = true;
-				/* Don't freeze altitude integral if it wants to throttle down */
-				saturation_z = vel_err(2) < 0.0f ? true : saturation_z;
+	// TODO make this a parameter	
+	bool thrust_3d_valid = true;
+	
+	// 3D thrust control
+	if (thrust_3d_valid) {
+		
+		// TODO make these a parameter
+		float max_thrust_body_x = 0.2f;
+		float max_thrust_body_y = 0.2f;
 
-			} else {
-				/* preserve thrust Z component and lower XY, keeping altitude is more important than position */
-				float thrust_xy_max = sqrtf(thr_max * thr_max - thrust_sp(2) * thrust_sp(2));
-				float thrust_xy_abs = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
-				float k = thrust_xy_max / thrust_xy_abs;
-				thrust_sp(0) *= k;
-				thrust_sp(1) *= k;
-				/* Don't freeze x,y integrals if they both want to throttle down */
-				saturation_xy = ((vel_err(0) * _vel_sp(0) < 0.0f) && (vel_err(1) * _vel_sp(1) < 0.0f)) ? saturation_xy : true;
-			}
+		// Thrust limits
+		math::Vector<3> max_body_thrust(max_thrust_body_x, max_thrust_body_y, -thr_max);
+		math::Vector<3> min_body_thrust(-max_thrust_body_x, -max_thrust_body_y, -thr_min);
+		math::Vector<3> thrust_3d_body_clipped(0.0f, 0.0f, 0.0f);
+		
+		// Limit thrust components independently
+		for (size_t i = 0; i < 3; i++) {
+			if (thrust_sp_body(i) < min_body_thrust(i)) {
+				thrust_3d_body_clipped(i) = thrust_sp_body(i) - min_body_thrust(i);
+				thrust_sp_body(i) -= - thrust_3d_body_clipped(i);
+			} else if (thrust_sp_body(i) > max_body_thrust(i)) {
+				thrust_3d_body_clipped(i) = thrust_sp_body(i) - max_body_thrust(i);
+				thrust_sp_body(i) -= thrust_3d_body_clipped(i);		
+			}	
+		}
+		
+		// Don't freeze integrals if it wants to reduce saturation		
+		if (fabsf(thrust_3d_body_clipped(0)) > 0.0f) {
+			saturation_x = (vel_err(0) * _vel_sp(0) < 0.0f) ? saturation_x : true;
+		}
+		if (fabsf(thrust_3d_body_clipped(1)) > 0.0f) {
+			saturation_y = (vel_err(1) * _vel_sp(1) < 0.0f) ? saturation_y : true;
+		}
+		if (fabsf(thrust_3d_body_clipped(2)) > 0.0f) {
+			saturation_z = (vel_err(2) * _vel_sp(2) < 0.0f) ? saturation_z : true;
+		}			
+		
+		_att_sp.thrust_3d_valid = true;
+		_att_sp.thrust_3d[0] = thrust_sp_body(0);
+		_att_sp.thrust_3d[1] = thrust_sp_body(1);
+		_att_sp.thrust_3d[2] = thrust_sp_body(2);
+		_att_sp.thrust = math::Vector<3>(thrust_sp_body(0), thrust_sp_body(1), thrust_sp_body(2)).length();
 
+		// TODO make this a parameter
+		bool thrust_3d_attitude_aid_valid = false;
+
+		if (thrust_3d_attitude_aid_valid) {
+			// Use attitude to provide the X and Y thrust that saturated
+			math::Vector<3> thrust_3d_clipped = _R * thrust_3d_body_clipped;
+			thrust_sp(0) = thrust_3d_clipped(0); 
+			thrust_sp(1) = thrust_3d_clipped(1); 
+			thrust_sp(2) = - _att_sp.thrust;
 		} else {
-			/* Z component is positive, going down (Z is positive down in NED), simply limit thrust vector */
-			float k = thr_max / fabsf(thrust_body_z);
-			thrust_sp *= k;
-			saturation_xy = true;
-			saturation_z = true;
+			// Fix roll and pitch at 0
+			thrust_sp(0) = 0.0f; 
+			thrust_sp(1) = 0.0f; 
+			thrust_sp(2) = - _att_sp.thrust;
 		}
 
-		thrust_body_z = thr_max;
+	} else {
+		// 1D thrust control along - z body axis
+
+		/* limit max thrust */
+		if (fabsf(thrust_sp_body(2)) > thr_max) {
+			if (thrust_sp(2) < 0.0f) {
+				if (-thrust_sp(2) > thr_max) {
+					/* thrust Z component is too large, limit it */
+					thrust_sp(0) = 0.0f;
+					thrust_sp(1) = 0.0f;
+					thrust_sp(2) = -thr_max;
+					saturation_x = true;
+					saturation_y = true;
+					/* Don't freeze altitude integral if it wants to throttle down */
+					saturation_z = vel_err(2) < 0.0f ? true : saturation_z;
+
+				} else {
+					/* preserve thrust Z component and lower XY, keeping altitude is more important than position */
+					float thrust_xy_max = sqrtf(thr_max * thr_max - thrust_sp(2) * thrust_sp(2));
+					float thrust_xy_abs = math::Vector<2>(thrust_sp(0), thrust_sp(1)).length();
+					float k = thrust_xy_max / thrust_xy_abs;
+					thrust_sp(0) *= k;
+					thrust_sp(1) *= k;
+					/* Don't freeze x,y integrals if they both want to throttle down */
+					saturation_x = (vel_err(0) * _vel_sp(0) < 0.0f) ? saturation_x : true;
+					saturation_y = (vel_err(1) * _vel_sp(1) < 0.0f) ? saturation_y : true;
+				}
+
+			} else {
+				/* Z component is positive, going down (Z is positive down in NED), simply limit thrust vector */
+				float k = thr_max / fabsf(thrust_sp_body(2));
+				thrust_sp *= k;
+				saturation_x = true;
+				saturation_y = true;
+				saturation_z = true;
+			}
+
+			thrust_sp_body(2) = thr_max;
+		}
+
+		_att_sp.thrust = math::max(thrust_sp_body(2), thr_min);
+		_att_sp.thrust_3d_valid = false;
+		_att_sp.thrust_3d[0] = 0.0f;
+		_att_sp.thrust_3d[1] = 0.0f;
+		_att_sp.thrust_3d[2] = - _att_sp.thrust;
 	}
 
 	/* if any of the thrust setpoint is bogus, send out a warning */
 	if (!PX4_ISFINITE(thrust_sp(0)) || !PX4_ISFINITE(thrust_sp(1)) || !PX4_ISFINITE(thrust_sp(2))) {
 		warn_rate_limited("Thrust setpoint not finite");
 	}
-
-	_att_sp.thrust = math::max(thrust_body_z, thr_min);
-
+	
 	/* update integrals */
-	if (_control_mode.flag_control_velocity_enabled && !saturation_xy) {
+	if (_control_mode.flag_control_velocity_enabled && !saturation_x) {
 		_thrust_int(0) += vel_err(0) * _params.vel_i(0) * dt;
-		_thrust_int(1) += vel_err(1) * _params.vel_i(1) * dt;
 	}
 
+	if (_control_mode.flag_control_velocity_enabled && !saturation_y) {
+		_thrust_int(1) += vel_err(1) * _params.vel_i(1) * dt;
+	}
+	
 	if (_control_mode.flag_control_climb_rate_enabled && !saturation_z) {
 		_thrust_int(2) += vel_err(2) * _params.vel_i(2) * dt;
 	}
-
+		
 	/* calculate attitude setpoint from thrust vector */
 	if (_control_mode.flag_control_velocity_enabled || _control_mode.flag_control_acceleration_enabled) {
 		/* desired body_z axis = -normalize(thrust_vector) */
@@ -2820,6 +2896,10 @@ MulticopterPositionControl::generate_attitude_setpoint(float dt)
 	if (!_control_mode.flag_control_climb_rate_enabled) {
 		float thr_val = throttle_curve(_manual.z, _params.thr_hover);
 		_att_sp.thrust = math::min(thr_val, _manual_thr_max.get());
+		_att_sp.thrust_3d_valid = false;
+		_att_sp.thrust_3d[0] = 0.0f;
+		_att_sp.thrust_3d[1] = 0.0f;
+		_att_sp.thrust_3d[2] = - _att_sp.thrust;
 
 		/* enforce minimum throttle if not landed */
 		if (!_vehicle_land_detected.landed) {
@@ -3040,6 +3120,10 @@ MulticopterPositionControl::task_main()
 			/* make sure attitude setpoint output "disables" attitude control
 			 * TODO: we need a defined setpoint to do this properly especially when adjusting the mixer */
 			_att_sp.thrust = 0.0f;
+			_att_sp.thrust_3d_valid = false;
+			_att_sp.thrust_3d[0] = 0.0f;
+			_att_sp.thrust_3d[1] = 0.0f;
+			_att_sp.thrust_3d[2] = 0.0f;
 			_att_sp.timestamp = hrt_absolute_time();
 		}
 
