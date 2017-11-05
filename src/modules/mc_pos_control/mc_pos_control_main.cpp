@@ -2668,16 +2668,26 @@ MulticopterPositionControl::calculate_thrust_setpoint(float dt)
 	/* To compensate for excess thrust during attitude tracking errors we
 	 * project the desired thrust force vector F onto the real vehicle's thrust axis in NED */
 	math::Vector<3> thrust_sp_body = _R.transposed() * thrust_sp;
+	math::Vector<3> thrust_3d_sp_body = thrust_sp_body;
 
 	// TODO make this a parameter	
-	bool thrust_3d_valid = true;
+	bool use_thrust_3d = true;
+	// bool use_thrust_3d = false;
 	
 	// 3D thrust control
-	if (thrust_3d_valid) {
+	if (use_thrust_3d && (_saturation_status.flags.x_thrust_valid || _saturation_status.flags.y_thrust_valid)) {
 		
 		// TODO make these a parameter
 		float max_thrust_body_x = 0.2f;
 		float max_thrust_body_y = 0.2f;
+
+		// Remove thrust axes that are not controllable
+		if (not _saturation_status.flags.x_thrust_valid) {
+			max_thrust_body_x = 0.0f;
+		}
+		if (not _saturation_status.flags.y_thrust_valid) {
+			max_thrust_body_y = 0.0f;
+		}
 
 		// Thrust limits
 		math::Vector<3> max_body_thrust(max_thrust_body_x, max_thrust_body_y, -thr_max);
@@ -2688,47 +2698,50 @@ MulticopterPositionControl::calculate_thrust_setpoint(float dt)
 		for (size_t i = 0; i < 3; i++) {
 			if (thrust_sp_body(i) < min_body_thrust(i)) {
 				thrust_3d_body_clipped(i) = thrust_sp_body(i) - min_body_thrust(i);
-				thrust_sp_body(i) -= - thrust_3d_body_clipped(i);
+				thrust_3d_sp_body(i) -= - thrust_3d_body_clipped(i);
 			} else if (thrust_sp_body(i) > max_body_thrust(i)) {
 				thrust_3d_body_clipped(i) = thrust_sp_body(i) - max_body_thrust(i);
-				thrust_sp_body(i) -= thrust_3d_body_clipped(i);		
+				thrust_3d_sp_body(i) -= thrust_3d_body_clipped(i);		
 			}	
 		}
 		
 		// Don't freeze integrals if it wants to reduce saturation		
-		if (fabsf(thrust_3d_body_clipped(0)) > 0.0f) {
+		if ((fabsf(thrust_3d_body_clipped(0)) > 0.0f) 
+			|| (_saturation_status.flags.x_thrust_valid && (_saturation_status.flags.x_thrust_pos || _saturation_status.flags.x_thrust_neg))) {
 			saturation_x = (vel_err(0) * _vel_sp(0) < 0.0f) ? saturation_x : true;
 		}
-		if (fabsf(thrust_3d_body_clipped(1)) > 0.0f) {
+		if ((fabsf(thrust_3d_body_clipped(1)) > 0.0f)
+			|| (_saturation_status.flags.y_thrust_valid && (_saturation_status.flags.y_thrust_pos || _saturation_status.flags.y_thrust_neg))) {
 			saturation_y = (vel_err(1) * _vel_sp(1) < 0.0f) ? saturation_y : true;
 		}
-		if (fabsf(thrust_3d_body_clipped(2)) > 0.0f) {
+		if ((fabsf(thrust_3d_body_clipped(2)) > 0.0f)
+			|| (_saturation_status.flags.z_thrust_valid && (_saturation_status.flags.z_thrust_pos || _saturation_status.flags.z_thrust_neg))) {
 			saturation_z = (vel_err(2) * _vel_sp(2) < 0.0f) ? saturation_z : true;
 		}			
 		
 		_att_sp.thrust_3d_valid = true;
-		_att_sp.thrust_3d[0] = thrust_sp_body(0);
-		_att_sp.thrust_3d[1] = thrust_sp_body(1);
-		_att_sp.thrust_3d[2] = thrust_sp_body(2);
+		_att_sp.thrust_3d[0] = thrust_3d_sp_body(0);
+		_att_sp.thrust_3d[1] = thrust_3d_sp_body(1);
+		_att_sp.thrust_3d[2] = thrust_3d_sp_body(2);
 		_att_sp.thrust = math::Vector<3>(thrust_sp_body(0), thrust_sp_body(1), thrust_sp_body(2)).length();
 
+		// Use attitude to provide the X and Y thrust that saturated
+		thrust_sp_body(0) = thrust_3d_body_clipped(0);
+		thrust_sp_body(1) = thrust_3d_body_clipped(1);
+		thrust_sp_body(2) = thrust_3d_sp_body(2);
+		thrust_sp = _R * thrust_sp_body;
+
 		// TODO make this a parameter
-		bool thrust_3d_attitude_aid_valid = false;
+		// TODO this is buggy when force_level_attitude = false, the drone sometimes hovers with non 0 tilt...
+		bool force_level_attitude = true;
 
-		if (thrust_3d_attitude_aid_valid) {
-			// Use attitude to provide the X and Y thrust that saturated
-			math::Vector<3> thrust_3d_clipped = _R * thrust_3d_body_clipped;
-			thrust_sp(0) = thrust_3d_clipped(0); 
-			thrust_sp(1) = thrust_3d_clipped(1); 
-			thrust_sp(2) = - _att_sp.thrust;
-		} else {
-			// Fix roll and pitch at 0
-			thrust_sp(0) = 0.0f; 
-			thrust_sp(1) = 0.0f; 
-			thrust_sp(2) = - _att_sp.thrust;
+		// Unless we want to maintain level attitude and do everything with 3D thrust
+		if (force_level_attitude && _saturation_status.flags.x_thrust_valid && _saturation_status.flags.y_thrust_valid) {
+			thrust_sp(0) = 0.0f;
+			thrust_sp(1) = 0.0f;
 		}
-
-	} else {
+	} 
+	else {
 		// 1D thrust control along - z body axis
 
 		/* limit max thrust */
