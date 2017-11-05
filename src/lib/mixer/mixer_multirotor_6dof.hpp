@@ -124,9 +124,11 @@ private:
 	float				_y_scale;
 	float				_z_scale;
 	float				_idle_speed;
+	float				_out_max;
+	float 				_out_min;
 	float 				_delta_out_max;
 	float 				_thrust_factor;
-
+	
 	bool 				_controlled_axes[6]; 	// for underactuated systems, keeps track of which axes are controllable
 
 	void update_saturation_status(unsigned index, bool clipping_high, bool clipping_low);
@@ -136,7 +138,7 @@ private:
 	const Rotor			*_rotors;
 
 	matrix::Vector<float, 6> get_command(void) const;
-	matrix::Vector<float, 6> desaturate_command(const matrix::Vector<float, 6>& command) const;
+	matrix::Vector<float, 6> clip_command(const matrix::Vector<float, 6>& command) const;
 
 	float 				*_outputs_prev = nullptr;
 
