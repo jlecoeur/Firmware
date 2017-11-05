@@ -116,27 +116,6 @@ public:
 	 */
 	virtual void			set_thrust_factor(float val) {_thrust_factor = val;}
 
-	union saturation_status {
-		struct {
-			uint16_t valid			: 1; // 0 - true when the saturation status is used
-			uint16_t motor_pos		: 1; // 1 - true when any motor has saturated in the positive direction
-			uint16_t motor_neg		: 1; // 2 - true when any motor has saturated in the negative direction
-			uint16_t roll_pos		: 1; // 3 - true when a positive roll demand change will increase saturation
-			uint16_t roll_neg		: 1; // 4 - true when a negative roll demand change will increase saturation
-			uint16_t pitch_pos		: 1; // 5 - true when a positive pitch demand change will increase saturation
-			uint16_t pitch_neg		: 1; // 6 - true when a negative pitch demand change will increase saturation
-			uint16_t yaw_pos		: 1; // 7 - true when a positive yaw demand change will increase saturation
-			uint16_t yaw_neg		: 1; // 8 - true when a negative yaw demand change will increase saturation
-			uint16_t x_thrust_pos	: 1; // 9 - true when a positive x thrust demand change will increase saturation
-			uint16_t x_thrust_neg	: 1; //10 - true when a negative x thrust demand change will increase saturation
-			uint16_t y_thrust_pos	: 1; //11 - true when a positive y thrust demand change will increase saturation
-			uint16_t y_thrust_neg	: 1; //12 - true when a negative y thrust demand change will increase saturation
-			uint16_t z_thrust_pos	: 1; //13 - true when a positive z thrust demand change will increase saturation
-			uint16_t z_thrust_neg	: 1; //14 - true when a negative z thrust demand change will increase saturation
-		} flags;
-		uint16_t value;
-	};
-
 private:
 	float				_roll_scale;
 	float				_pitch_scale;
@@ -148,8 +127,10 @@ private:
 	float 				_delta_out_max;
 	float 				_thrust_factor;
 
+	bool 				_controlled_axes[6]; 	// for underactuated systems, keeps track of which axes are controllable
+
 	void update_saturation_status(unsigned index, bool clipping_high, bool clipping_low);
-	saturation_status _saturation_status;
+	MultirotorMixer::saturation_status _saturation_status;
 
 	unsigned			_rotor_count;
 	const Rotor			*_rotors;

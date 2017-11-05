@@ -244,15 +244,6 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 		roll_pitch_scale = (thrust + boost) / (thrust - min_out);
 	}
 
-	// capture saturation
-	if (min_out < 0.0f) {
-		_saturation_status.flags.motor_neg = true;
-	}
-
-	if (max_out > 1.0f) {
-		_saturation_status.flags.motor_pos = true;
-	}
-
 	// Thrust reduction is used to reduce the collective thrust if we hit
 	// the upper throttle limit
 	float thrust_reduction = 0.0f;
@@ -318,6 +309,11 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 
 	}
 
+	// Update saturation based on controlled axes
+	_saturation_status.flags.x_thrust_valid = false;
+	_saturation_status.flags.y_thrust_valid = false;
+	_saturation_status.flags.z_thrust_valid = true;
+	
 	/* slew rate limiting and saturation checking */
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		bool clipping_high = false;

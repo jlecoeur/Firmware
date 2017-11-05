@@ -98,6 +98,20 @@ MultirotorMixer6dof::MultirotorMixer6dof(ControlCallback control_cb,
 	_outputs_prev(new float[_rotor_count])
 {
 	memset(_outputs_prev, _idle_speed, _rotor_count * sizeof(float));
+
+	// Check for uncontrolled axes
+	for (size_t j = 0; j < 6; j++) {
+		float norm2 = 0.0f;
+		for (size_t i = 0; i < _rotor_count; i++) {
+			norm2 += _rotors[i].scale[j] * _rotors[i].scale[j];
+}
+
+		if (norm2 > 1e-6f) {
+			_controlled_axes[j] = true;
+		} else {
+			_controlled_axes[j] = false;			
+		}
+	}
 }
 
 MultirotorMixer6dof::~MultirotorMixer6dof()
@@ -259,7 +273,15 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 	*/
 	
 	// Get raw command
-	matrix::Vector<float, 6> command = get_command();
+	const matrix::Vector<float, 6> raw_command = get_command();
+
+	// Remove uncontrolled axes
+	matrix::Vector<float, 6> command = raw_command;
+	for (size_t j = 0; j < 6; j++) {
+		if (not _controlled_axes[j]) {
+			command(j) = 0.0f;
+		}
+	}
 
 	// Make sure the command is in the feaseable actuation space
 	command = desaturate_command(command);
@@ -291,6 +313,11 @@ MultirotorMixer6dof::mix(float *outputs, unsigned space)
 	// clean out class variable used to capture saturation
 	_saturation_status.value = 0;
 		
+	// Update saturation based on controlled axes
+	_saturation_status.flags.x_thrust_valid = _controlled_axes[3];
+	_saturation_status.flags.y_thrust_valid = _controlled_axes[4];
+	_saturation_status.flags.z_thrust_valid = _controlled_axes[5];
+
 	// slew rate limiting and saturation checking
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		bool clipping_high = false;
@@ -345,9 +372,6 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 	// The motor is saturated at the upper limit
 	// check which control axes and which directions are contributing
 	if (clipping_high) {
-		// At least one motor is saturated at the upper limit
-		_saturation_status.flags.motor_pos = true;
-		
 		if (_rotors[index].scale[ROLL_COMMAND] > 0.0f) {
 			// A positive change in roll will increase saturation
 			_saturation_status.flags.roll_pos = true;
@@ -411,9 +435,6 @@ MultirotorMixer6dof::update_saturation_status(unsigned index, bool clipping_high
 	// The motor is saturated at the lower limit
 	// check which control axes and which directions are contributing
 	if (clipping_low) {
-		// At least one motor is saturated at the lower limit
-		_saturation_status.flags.motor_neg = true;
-		
 		// check if the roll input is saturating
 		if (_rotors[index].scale[ROLL_COMMAND] > 0.0f) {
 			// A negative change in roll will increase saturation
