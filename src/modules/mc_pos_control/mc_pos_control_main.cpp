@@ -67,9 +67,11 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/actuator_controls_status.h>
 
 #include <float.h>
 #include <lib/geo/geo.h>
+#include <lib/mixer/mixer.h>
 #include <mathlib/mathlib.h>
 #include <systemlib/mavlink_log.h>
 
@@ -140,6 +142,7 @@ private:
 	int		_vehicle_land_detected_sub;	/**< vehicle land detected subscription */
 	int		_vehicle_attitude_sub;		/**< control state subscription */
 	int		_control_mode_sub;		/**< vehicle control mode subscription */
+	int		_actuator_controls_status_sub;		/**< motor limits subscription */	
 	int		_params_sub;			/**< notification of parameter updates */
 	int		_manual_sub;			/**< notification of manual control updates */
 	int		_local_pos_sub;			/**< vehicle local position */
@@ -162,6 +165,8 @@ private:
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct home_position_s				_home_pos; 				/**< home position */
 
+	MultirotorMixer::saturation_status _saturation_status{};
+	
 	control::BlockParamFloat _manual_thr_min; /**< minimal throttle output when flying in manual mode */
 	control::BlockParamFloat _manual_thr_max; /**< maximal throttle output when flying in manual mode */
 	control::BlockParamFloat _xy_vel_man_expo; /**< ratio of exponential curve for stick input in xy direction pos mode */
@@ -412,6 +417,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	/* subscriptions */
 	_vehicle_attitude_sub(-1),
 	_control_mode_sub(-1),
+	_actuator_controls_status_sub(-1),
 	_params_sub(-1),
 	_manual_sub(-1),
 	_local_pos_sub(-1),
@@ -432,6 +438,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_pos_sp_triplet{},
 	_local_pos_sp{},
 	_home_pos{},
+	_saturation_status{},
 	_manual_thr_min(this, "MANTHR_MIN"),
 	_manual_thr_max(this, "MANTHR_MAX"),
 	_xy_vel_man_expo(this, "XY_MAN_EXPO"),
@@ -763,6 +770,15 @@ MulticopterPositionControl::poll_subscriptions()
 
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_control_mode), _control_mode_sub, &_control_mode);
+	}
+
+	orb_check(_actuator_controls_status_sub, &updated);
+	
+	if (updated) {
+		actuator_controls_status_s actuator_controls_status = {};
+		orb_copy(ORB_ID(actuator_controls_status), _actuator_controls_status_sub, &actuator_controls_status);
+
+		_saturation_status.value = actuator_controls_status.saturation_status;
 	}
 
 	orb_check(_manual_sub, &updated);
@@ -3038,6 +3054,7 @@ MulticopterPositionControl::task_main()
 	_vehicle_land_detected_sub = orb_subscribe(ORB_ID(vehicle_land_detected));
 	_vehicle_attitude_sub = orb_subscribe(ORB_ID(vehicle_attitude));
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
+	_actuator_controls_status_sub = orb_subscribe(ORB_ID(actuator_controls_status));
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
