@@ -207,12 +207,10 @@ def normalize_mix_px4(B):
     # Scale yaw separately
     B_norm[2] = B_max[2]
 
-    # Same scale on x, y
-    B_norm[3] = max(B_max[3], B_max[4])
+    # Same scale on XY thrust as on Z thrust
+    B_norm[3] = B_max[5]
     B_norm[4] = B_norm[3]
-
-    # Scale z thrust separately
-    B_norm[5] = B_max[5]
+    B_norm[5] = B_norm[3]
 
     # Normalize
     B_norm[np.abs(B_norm) < 1e-3] = 1
