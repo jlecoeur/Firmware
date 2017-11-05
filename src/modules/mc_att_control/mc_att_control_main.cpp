@@ -72,7 +72,7 @@
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/manual_control_setpoint.h>
 #include <uORB/topics/mc_att_ctrl_status.h>
-#include <uORB/topics/multirotor_motor_limits.h>
+#include <uORB/topics/actuator_controls_status.h>
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/sensor_bias.h>
 #include <uORB/topics/sensor_correction.h>
@@ -134,7 +134,7 @@ private:
 	int		_params_sub;			/**< parameter updates subscription */
 	int		_manual_control_sp_sub;	/**< manual control setpoint subscription */
 	int		_vehicle_status_sub;	/**< vehicle status subscription */
-	int		_motor_limits_sub;		/**< motor limits subscription */
+	int		_actuator_controls_status_sub;		/**< motor limits subscription */
 	int		_battery_status_sub;	/**< battery status subscription */
 	int		_sensor_gyro_sub[MAX_GYRO_COUNT];	/**< gyro data subscription */
 	int		_sensor_correction_sub;	/**< sensor thermal correction subscription */
@@ -295,6 +295,7 @@ private:
 	void		vehicle_motor_limits_poll();
 	void		vehicle_rates_setpoint_poll();
 	void		vehicle_status_poll();
+	void		actuator_controls_status_poll();
 
 	/**
 	 * Attitude controller.
@@ -340,7 +341,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_params_sub(-1),
 	_manual_control_sp_sub(-1),
 	_vehicle_status_sub(-1),
-	_motor_limits_sub(-1),
+	_actuator_controls_status_sub(-1),
 	_battery_status_sub(-1),
 	_sensor_correction_sub(-1),
 	_sensor_bias_sub(-1),
@@ -730,17 +731,17 @@ MulticopterAttitudeControl::vehicle_status_poll()
 }
 
 void
-MulticopterAttitudeControl::vehicle_motor_limits_poll()
+MulticopterAttitudeControl::actuator_controls_status_poll()
 {
 	/* check if there is a new message */
 	bool updated;
-	orb_check(_motor_limits_sub, &updated);
+	orb_check(_actuator_controls_status_sub, &updated);
 
 	if (updated) {
-		multirotor_motor_limits_s motor_limits = {};
-		orb_copy(ORB_ID(multirotor_motor_limits), _motor_limits_sub, &motor_limits);
+		actuator_controls_status_s actuator_controls_status = {};
+		orb_copy(ORB_ID(actuator_controls_status), _actuator_controls_status_sub, &actuator_controls_status);
 
-		_saturation_status.value = motor_limits.saturation_status;
+		_saturation_status.value = actuator_controls_status.saturation_status;
 	}
 }
 
@@ -1085,7 +1086,7 @@ MulticopterAttitudeControl::task_main()
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 	_manual_control_sp_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
 	_vehicle_status_sub = orb_subscribe(ORB_ID(vehicle_status));
-	_motor_limits_sub = orb_subscribe(ORB_ID(multirotor_motor_limits));
+	_actuator_controls_status_sub = orb_subscribe(ORB_ID(actuator_controls_status));
 	_battery_status_sub = orb_subscribe(ORB_ID(battery_status));
 
 	_gyro_count = math::min(orb_group_count(ORB_ID(sensor_gyro)), MAX_GYRO_COUNT);
@@ -1152,7 +1153,7 @@ MulticopterAttitudeControl::task_main()
 			vehicle_control_mode_poll();
 			vehicle_manual_poll();
 			vehicle_status_poll();
-			vehicle_motor_limits_poll();
+			actuator_controls_status_poll();
 			battery_status_poll();
 			vehicle_attitude_poll();
 			sensor_correction_poll();

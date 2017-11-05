@@ -15,4 +15,3 @@ uint8 INDEX_Y_THRUST_POS = 11   # True if positive Y thrust increment will incre
 uint8 INDEX_Y_THRUST_NEG = 12   # True if negative Y thrust increment will increase motor saturation
 uint8 INDEX_Z_THRUST_POS = 13   # True if positive Z thrust increment will increase motor saturation
 uint8 INDEX_Z_THRUST_NEG = 14   # True if negative Z thrust increment will increase motor saturation
-

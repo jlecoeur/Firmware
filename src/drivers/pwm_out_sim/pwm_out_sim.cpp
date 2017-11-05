@@ -79,7 +79,7 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_outputs.h>
-#include <uORB/topics/multirotor_motor_limits.h>
+#include <uORB/topics/actuator_controls_status.h>
 
 #include <systemlib/err.h>
 
@@ -119,7 +119,7 @@ private:
 	unsigned	_poll_fds_num;
 	int		_armed_sub;
 	orb_advert_t _outputs_pub;
-	orb_advert_t _motor_limits_pub;
+	orb_advert_t _actuator_controls_status_pub;
 	unsigned	_num_outputs;
 	bool		_primary_pwm_device;
 
@@ -185,7 +185,7 @@ PWMSim::PWMSim() :
 	_poll_fds_num(0),
 	_armed_sub(-1),
 	_outputs_pub(nullptr),
-	_motor_limits_pub(nullptr),
+	_actuator_controls_status_pub(nullptr),
 	_num_outputs(0),
 	_primary_pwm_device(false),
 	_groups_required(0),
@@ -378,11 +378,11 @@ PWMSim::task_main()
 
 	/* advertise the mixed control outputs */
 	actuator_outputs_s outputs = {};
-	multirotor_motor_limits_s motor_limits = {};
+	actuator_controls_status_s actuator_controls_status = {};
 	
 	/* advertise the mixed control outputs, insist on the first group output */
 	_outputs_pub = orb_advertise(ORB_ID(actuator_outputs), &outputs);
-	_motor_limits_pub = orb_advertise(ORB_ID(multirotor_motor_limits), &motor_limits);
+	_actuator_controls_status_pub = orb_advertise(ORB_ID(actuator_controls_status), &actuator_controls_status);
 
 
 	/* loop until killed */
@@ -531,10 +531,10 @@ PWMSim::task_main()
 			saturation_status.value = _mixers->get_saturation_status();
 			
 			if (saturation_status.flags.valid) {
-				motor_limits.timestamp = hrt_absolute_time();
-				motor_limits.saturation_status = saturation_status.value;
+				actuator_controls_status.timestamp = hrt_absolute_time();
+				actuator_controls_status.saturation_status = saturation_status.value;
 				
-				orb_publish(ORB_ID(multirotor_motor_limits), _motor_limits_pub, &motor_limits);
+				orb_publish(ORB_ID(actuator_controls_status), _actuator_controls_status_pub, &actuator_controls_status);
 			}
 		}
 
